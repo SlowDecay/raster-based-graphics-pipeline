@@ -333,12 +333,58 @@ void transform_view()
     fout.close();
 }
 
+void transform_projection()
+{
+    Point eye, look, up;
+
+    ifstream fin("data/scene.txt");
+    ofstream fout("data/stage3.txt");
+
+    fin >> eye >> look >> up;
+
+    double fovY, aspectRatio, near, far;
+    fin >> fovY >> aspectRatio >> near >> far;
+
+    fovY *= PI/180;
+
+    fin.close();
+
+    fin.open("data/stage2.txt");
+
+    double fovX = fovY *aspectRatio;
+    double t = near * tan(fovY / 2);
+    double r = near * tan(fovX / 2);
+
+    Matrix pr;
+
+    pr[0][0] = near/r, pr[1][1] = near/t;
+    pr[2][2] = -(far+near)/(far-near), pr[2][3] = -(2*far*near)/(far-near);
+    pr[3][2] = -1;
+
+    Point p1, p2, p3;
+    while (fin >> p1 >> p2 >> p3)
+    {
+        p1 = pr * p1;
+        p2 = pr * p2;
+        p3 = pr * p3;
+
+        fout << p1 << endl;
+        fout << p2 << endl;
+        fout << p3 << endl
+             << endl;
+    }
+
+    fin.close();
+    fout.close();
+}
+
 int main()
 {
     init();
 
     transform_model();
     transform_view();
+    transform_projection();
 
     return 0;
 }
