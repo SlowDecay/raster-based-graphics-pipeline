@@ -63,6 +63,8 @@ struct Point
 
         return p;
     }
+
+    Point operator-() { return Point(-cords[0], -cords[1], -cords[2]); }
 };
 
 Point operator*(Point p, double m) { return Point(p[0] * m, p[1] * m, p[2] * m); }
@@ -287,10 +289,56 @@ void transform_model()
     fout.close();
 }
 
+void transform_view()
+{
+    Point eye, look, up;
+
+    ifstream fin("data/scene.txt");
+    ofstream fout("data/stage2.txt");
+
+    fin >> eye >> look >> up;
+
+    fin.close();
+
+    fin.open("data/stage1.txt");
+
+    Point l = look - eye;
+    l.normDist();
+    Point r = l.cross(up);
+    r.normDist();
+    Point u = r.cross(l);
+
+    Matrix tr = getTransMatrix(-eye);
+
+    Matrix rot = idt;
+    for (int j = 0; j < K - 1; j++)
+        rot[0][j] = r[j], rot[1][j] = u[j], rot[2][j] = -l[j];
+
+    Matrix v = rot * tr;
+
+    Point p1, p2, p3;
+    while (fin >> p1 >> p2 >> p3)
+    {
+        p1 = v * p1;
+        p2 = v * p2;
+        p3 = v * p3;
+
+        fout << p1 << endl;
+        fout << p2 << endl;
+        fout << p3 << endl
+             << endl;
+    }
+
+    fin.close();
+    fout.close();
+}
+
 int main()
 {
     init();
+
     transform_model();
+    transform_view();
 
     return 0;
 }
