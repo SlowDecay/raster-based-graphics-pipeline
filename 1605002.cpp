@@ -3,6 +3,8 @@
 using namespace std;
 typedef vector<double> vd;
 
+mt19937 rng(chrono::steady_clock::now().time_since_epoch().count());
+
 const int K = 4;
 const double EPS = 1e-6;
 const double PI = acos(-1);
@@ -102,18 +104,72 @@ Point rodrigues(Point a, Point axis, double angle)
     return res;
 }
 
+struct Segment
+{
+    Point p1, p2;
+
+    Segment(Point p1, Point p2) : p1(p1), p2(p2) {}
+
+    bool isHorz() { return fabs(p1[1] - p2[1]) < EPS; }
+
+    double yxSlope() { return (p1[0] - p2[0]) / (p1[1] - p2[1]); }
+    double yzSlope() { return (p1[2] - p2[2]) / (p1[1] - p2[1]); }
+
+    bool contains(double ys)
+    {
+        if(p1[1] < ys && p2[1] < ys) return false;
+        if(p1[1] > ys && p2[1] > ys) return false;
+
+        return true;
+    }
+
+    Point interpolate(double ys)
+    {
+        double x = p1[0] + yxSlope() * (ys - p1[1]);
+        double y = ys;
+        double z = p1[2] + yzSlope() * (ys - p1[1]);
+
+        return Point(x, y, z);
+    }
+};
+
 struct Triangle
 {
     Point points[3];
     int color[3];
 
-    Triangle()
+    void setColor()
     {
         for (int i = 0; i < 3; i++)
-            color[i] = rand() % 256;
+            color[i] = uniform_int_distribution<int>(0, 255)(rng);
     }
 
     Point &operator[](int idx) { return points[idx]; }
+
+    double max_y() { return max(points[0][1], max(points[1][1], points[2][1])); }
+    double min_y() { return min(points[0][1], min(points[1][1], points[2][1])); }
+
+    Point ched(double ys, bool daan)
+    {
+        Segment sides[] = {Segment(points[0], points[1]), 
+                            Segment(points[1], points[2]),
+                            Segment(points[0], points[2])};
+        
+        Point res = Point((daan? -1e3: 1e3), 0, 0);
+
+        for(int i = 0; i < 3; i++)
+        {
+            if(sides[i].isHorz()) continue;
+            if(!sides[i].contains(ys)) continue;
+
+            Point p = sides[i].interpolate(ys);
+
+            if(daan && p[0] > res[0]) res = p;
+            else if(!daan && p[0] < res[0]) res = p;
+        }
+
+        return res;
+    }
 };
 
 ostream &operator<<(ostream &dout, Triangle t)
@@ -426,16 +482,76 @@ void remove_hidden_surface()
     fin.open("data/stage3.txt");
 
     vector<vd> z_buffer(screen_width);
-    for(int i = 0; i < screen_width; i++) z_buffer[i].resize(screen_height, z_max);
+    for (int i = 0; i < screen_height; i++)
+        z_buffer[i].resize(screen_width, z_max);
 
     bitmap_image image(screen_width, screen_height);
-    for(int j = 0; j < screen_height; j++)
+    for (int j = 0; j < screen_height; j++)
     {
-        for(int i = 0; i < screen_width; i++) image.set_pixel(i, j, 0, 0, 0);
+        for (int i = 0; i < screen_width; i++)
+            image.set_pixel(i, j, 0, 0, 0);
     }
 
-    // do things
+    double dx = (box_right - box_left) / screen_width;
+    double dy = (box_up - box_down) / screen_height;
 
+    double top_y = box_up - dy / 2;
+    double bottom_y = box_down + dy / 2;
+    double left_x = box_left + dx / 2;
+    double right_x = box_right - dx / 2;
+
+    Triangle t;
+    while (fin >> t)
+    {
+        t.setColor();
+
+        double dcord = max(t.min_y(), bottom_y), ucord = min(t.max_y(), top_y);
+        int upor = round((top_y - ucord)/dy), nich = round((top_y - dcord)/dy);
+
+        cout << upor << " " << nich << endl << endl;
+
+        double ys = top_y - upor * dy;
+        for (int row = upor; row <= nich; row++)
+        {
+            Point lp = t.ched(ys, false);
+            Point rp = t.ched(ys, true);
+            
+            ys -= dy;
+            
+            if(lp[0] > rp[0]) continue;
+
+            cout << row << "  " << lp << "  " << rp << "  " << ys << endl;
+
+            double dhaal = (rp[2]-lp[2])/(rp[0]-lp[0]);
+            double zp = lp[2];
+
+            if(lp[0] < left_x) zp += (left_x-lp[0])*dhaal, lp[0] = left_x; 
+            if(rp[0] > right_x) rp[0] = right_x;
+
+            int baam = round((lp[0]-left_x)/dx), daan = round((rp[0]-left_x)/dx);
+            cout << row << " " << baam << " " << daan << endl;
+
+            for(int col = baam; col <= daan; col++)
+            {
+                if(zp >= z_min && z_buffer[row][col] > zp)
+                {
+                    z_buffer[row][col] = zp;
+                    image.set_pixel(col, row, t.color[0], t.color[1], t.color[2]);
+                }
+
+                zp += dx*dhaal;
+            }
+        }
+    }
+
+    for(int i = 0; i < screen_height; i++)
+    {
+        for(int j = 0; j < screen_width; j++)
+        {
+            if(z_buffer[i][j] < z_max) fout << setprecision(6) << fixed << z_buffer[i][j] << "    ";
+        }
+        fout << endl;
+    }
     image.save_image("data/out.bmp");
 
     fin.close();
