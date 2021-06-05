@@ -1,4 +1,5 @@
 #include <bits/stdc++.h>
+#include "bitmap_image.hpp"
 using namespace std;
 typedef vector<double> vd;
 
@@ -99,6 +100,34 @@ Point rodrigues(Point a, Point axis, double angle)
 
     Point res = cos(angle) * a + (1 - cos(angle)) * axis.dot(a) * axis + sin(angle) * axis.cross(a);
     return res;
+}
+
+struct Triangle
+{
+    Point points[3];
+    int color[3];
+
+    Triangle()
+    {
+        for (int i = 0; i < 3; i++)
+            color[i] = rand() % 256;
+    }
+
+    Point &operator[](int idx) { return points[idx]; }
+};
+
+ostream &operator<<(ostream &dout, Triangle t)
+{
+    dout << t[0] << "\n"
+         << t[1] << "\n"
+         << t[2] << endl;
+    return dout;
+}
+
+istream &operator>>(istream &din, Triangle &t)
+{
+    din >> t[0] >> t[1] >> t[2];
+    return din;
 }
 
 struct Matrix
@@ -345,20 +374,20 @@ void transform_projection()
     double fovY, aspectRatio, near, far;
     fin >> fovY >> aspectRatio >> near >> far;
 
-    fovY *= PI/180;
+    fovY *= PI / 180;
 
     fin.close();
 
     fin.open("data/stage2.txt");
 
-    double fovX = fovY *aspectRatio;
+    double fovX = fovY * aspectRatio;
     double t = near * tan(fovY / 2);
     double r = near * tan(fovX / 2);
 
     Matrix pr;
 
-    pr[0][0] = near/r, pr[1][1] = near/t;
-    pr[2][2] = -(far+near)/(far-near), pr[2][3] = -(2*far*near)/(far-near);
+    pr[0][0] = near / r, pr[1][1] = near / t;
+    pr[2][2] = -(far + near) / (far - near), pr[2][3] = -(2 * far * near) / (far - near);
     pr[3][2] = -1;
 
     Point p1, p2, p3;
@@ -378,6 +407,41 @@ void transform_projection()
     fout.close();
 }
 
+void remove_hidden_surface()
+{
+    ifstream fin("data/config.txt");
+    ofstream fout("data/z_buffer.txt");
+
+    int screen_width, screen_height; // might need to change to double
+    double box_left, box_right, box_up, box_down;
+    double z_max, z_min;
+
+    fin >> screen_width >> screen_height >> box_left >> box_down;
+    fin >> z_min >> z_max;
+
+    box_right = -box_left, box_up = -box_down;
+
+    fin.close();
+
+    fin.open("data/stage3.txt");
+
+    vector<vd> z_buffer(screen_width);
+    for(int i = 0; i < screen_width; i++) z_buffer[i].resize(screen_height, z_max);
+
+    bitmap_image image(screen_width, screen_height);
+    for(int j = 0; j < screen_height; j++)
+    {
+        for(int i = 0; i < screen_width; i++) image.set_pixel(i, j, 0, 0, 0);
+    }
+
+    // do things
+
+    image.save_image("data/out.bmp");
+
+    fin.close();
+    fout.close();
+}
+
 int main()
 {
     init();
@@ -385,6 +449,8 @@ int main()
     transform_model();
     transform_view();
     transform_projection();
+
+    remove_hidden_surface();
 
     return 0;
 }
